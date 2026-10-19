@@ -1,38 +1,21 @@
 #include <Arduino.h>
-
-#define LDR 2
-#define LED_W 17
-#define LED_Y 16
-#define BTN_CRASHE 20 // blue
-#define BTN_BLINK 21  // red
-
-#define N 32
-
-enum class Mode
-{
-  NORMAL,
-  BLINK,
-  CRASHED
-};
+#include "config.h"
+#include "Button.h"
 
 Mode mode = Mode::NORMAL;
 
-const u16_t LDR_THRESHOLD = 1000;
+Button btnCrash(BTN_CRASHE);
+Button btnBlink(BTN_BLINK);
 
 u16_t readings[N];
 u8_t idx = 0;
 u32_t sum = 0;
-
 
 u8_t lastButtonCrashState = 0;
 u8_t lastButtonBlinkState = 0;
 
 u8_t ledState_W = 0;
 u8_t ledState_Y = 0;
-
-u32_t adcPeriod = 10;
-u32_t debounceDuration = 100;
-
 
 u32_t lastTimeChange_buttonC = 0;
 u32_t lastTimeChange_buttonB = 0;
@@ -68,11 +51,11 @@ void filterInit(u16_t initData)
 
 void setup()
 {
-  pinMode(LED_W, OUTPUT);              
-  pinMode(LED_Y, OUTPUT);              
-  pinMode(LDR, INPUT);                 
-  pinMode(BTN_BLINK, INPUT_PULLDOWN);  
-  pinMode(BTN_CRASHE, INPUT_PULLDOWN); 
+  pinMode(LED_W, OUTPUT);
+  pinMode(LED_Y, OUTPUT);
+  pinMode(LDR, INPUT);
+  btnBlink.init();
+  btnCrash.init();
   Serial.begin(115200);
   Serial.println("setuped\n");
   filterInit(analogRead(LDR));
@@ -80,27 +63,33 @@ void setup()
 
 void ldr_blink()
 {
-  if (millis() - lastTimeChange > adcPeriod)
+  if (millis() - lastTimeChange > ADC_PERIOD)
   {
 
     u16_t adc_value = analogRead(LDR);
     u16_t filtered_adc_value = movingAvg(adc_value);
     Serial.printf("adc raw value %d adc filtered  %d Last time change %d\n", adc_value, filtered_adc_value, lastTimeChange);
+    if (filtered_adc_value < LDR_THRESHOLD_ON)
+    {
+      digitalWrite(LED_W, HIGH);
+    }
+    if (filtered_adc_value > LDR_THRESHOLD_OFF)
+    {
+      digitalWrite(LED_W, LOW);
+    }
 
-    digitalWrite(LED_W, filtered_adc_value < LDR_THRESHOLD ? HIGH : LOW);
     lastTimeChange = millis();
   }
 }
-
 
 void blink()
 {
   if (millis() - lastTimeChange_LED_Y > 700)
   {
-        lastTimeChange_LED_Y = millis();
-        ledState_Y = (ledState_Y == HIGH) ? LOW : HIGH;
-        Serial.printf("LED state: %d\n", ledState_Y);
-        digitalWrite(LED_Y, ledState_Y);
+    lastTimeChange_LED_Y = millis();
+    ledState_Y = (ledState_Y == HIGH) ? LOW : HIGH;
+    Serial.printf("LED state: %d\n", ledState_Y);
+    digitalWrite(LED_Y, ledState_Y);
   }
 }
 
@@ -108,61 +97,45 @@ void crashed()
 {
   if (millis() - lastTimeChange_LED_Y > 200)
   {
-        lastTimeChange_LED_Y = millis();
-        ledState_Y = (ledState_Y == HIGH) ? LOW : HIGH;
-        Serial.printf("LED Y state: %d\n", ledState_Y);
-        digitalWrite(LED_Y, ledState_Y);
+    lastTimeChange_LED_Y = millis();
+    ledState_Y = (ledState_Y == HIGH) ? LOW : HIGH;
+    Serial.printf("LED Y state: %d\n", ledState_Y);
+    digitalWrite(LED_Y, ledState_Y);
   }
 
   if (millis() - lastTimeChange_LED_W > 300)
   {
-        lastTimeChange_LED_W = millis();
-        ledState_W = (ledState_W == HIGH) ? LOW : HIGH;
-        Serial.printf("LED W state: %d\n", ledState_W);
-        digitalWrite(LED_W, ledState_W);
+    lastTimeChange_LED_W = millis();
+    ledState_W = (ledState_W == HIGH) ? LOW : HIGH;
+    Serial.printf("LED W state: %d\n", ledState_W);
+    digitalWrite(LED_W, ledState_W);
   }
 }
 
-
-
-
 void loop()
 { // нескінченний цикл — серце програми
-  if(millis() - lastTimeChange_buttonB > debounceDuration) {
-    u8_t buttonState = digitalRead(BTN_BLINK);
-    if (buttonState != lastButtonBlinkState)
-    {
-      lastButtonBlinkState = buttonState;
-      lastTimeChange_buttonB = millis();
-      if (buttonState == HIGH)
-      {
-        mode = (mode != Mode::BLINK) ? Mode::BLINK : Mode::NORMAL;
-        ledState_Y = (mode == Mode::NORMAL) ? LOW : HIGH;
-        digitalWrite(LED_Y, ledState_Y);
-      }
-    }
+
+  btnBlink.poll();
+  btnCrash.poll();
+
+  if (btnBlink.wasPressed())
+  {
+    mode = (mode != Mode::BLINK) ? Mode::BLINK : Mode::NORMAL;
+    ledState_Y = (mode == Mode::NORMAL) ? LOW : HIGH;
+    digitalWrite(LED_Y, ledState_Y);
   }
 
-
-  if(millis() - lastTimeChange_buttonC > debounceDuration) {
-    u8_t buttonState = digitalRead(BTN_CRASHE);
-    if (buttonState != lastButtonCrashState)
-    {
-      lastButtonCrashState = buttonState;
-      lastTimeChange_buttonC = millis();
-      if (buttonState == HIGH)
-      {
-        mode = (mode != Mode::CRASHED) ? Mode::CRASHED : Mode::NORMAL;
-        ledState_Y = (mode == Mode::NORMAL) ? LOW : HIGH;
-        ledState_W = (mode == Mode::NORMAL) ? LOW : HIGH;
-        digitalWrite(LED_Y, ledState_Y);
-        digitalWrite(LED_W, ledState_W);
-      }
-    }
+  if (btnCrash.wasPressed())
+  {
+    mode = (mode != Mode::CRASHED) ? Mode::CRASHED : Mode::NORMAL;
+    ledState_Y = (mode == Mode::NORMAL) ? LOW : HIGH;
+    ledState_W = (mode == Mode::NORMAL) ? LOW : HIGH;
+    digitalWrite(LED_Y, ledState_Y);
+    digitalWrite(LED_W, ledState_W);
   }
 
-
-  switch (mode){
+  switch (mode)
+  {
   case Mode::NORMAL:
     ldr_blink();
     break;
@@ -175,5 +148,4 @@ void loop()
     crashed();
     break;
   }
-
 }
