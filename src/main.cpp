@@ -2,6 +2,7 @@
 #include "config.h"
 #include "Button.h"
 #include "Led.h"
+#include "Ldr.h"
 
 Mode mode = Mode::NORMAL;
 
@@ -11,68 +12,19 @@ Button btnBlink(BTN_BLINK);
 Led ledY(LED_Y);
 Led ledW(LED_W);
 
-u16_t readings[N];
-u8_t idx = 0;
-u32_t sum = 0;
-
-u32_t lastTimeChange = 0;
-
-u16_t movingAvg(u16_t rawData)
-{
-  sum -= readings[idx];
-  sum += rawData;
-  readings[idx] = rawData;
-  idx++;
-
-  if (idx >= N)
-  {
-    idx = 0;
-  }
-
-  return sum / N;
-}
-
-void filterInit(u16_t initData)
-{
-  for (u8_t i = 0; i < N; i++)
-  {
-    readings[i] = initData;
-    sum += initData;
-  }
-}
+Ldr ldr(LDR, LDR_THRESHOLD_OFF, LDR_THRESHOLD_ON, ADC_PERIOD);
 
 void setup()
 {
-  pinMode(LDR, INPUT);
+  Serial.begin(115200);
+
   btnBlink.init();
   btnCrash.init();
 
   ledY.init();
   ledW.init();
 
-  Serial.begin(115200);
-  filterInit(analogRead(LDR));
-}
-
-void ldr_blink()
-{
-  if (millis() - lastTimeChange > ADC_PERIOD)
-  {
-
-    u16_t adc_value = analogRead(LDR);
-    u16_t filtered_adc_value = movingAvg(adc_value);
-    Serial.printf("adc raw value %d adc filtered  %d Last time change %d\n", adc_value, filtered_adc_value, lastTimeChange);
-    if (filtered_adc_value < LDR_THRESHOLD_ON)
-    {
-      ledW.set(true);
-    }
-    if (filtered_adc_value > LDR_THRESHOLD_OFF)
-    {
-      ledW.set(false);
-    }
-
-    lastTimeChange = millis();
-  }
+  ldr.init();
 }
 
 void loop()
@@ -80,6 +32,7 @@ void loop()
 
   btnBlink.poll();
   btnCrash.poll();
+  ldr.poll();
 
   if (btnBlink.wasPressed())
   {
@@ -98,7 +51,7 @@ void loop()
   switch (mode)
   {
   case Mode::NORMAL:
-    ldr_blink();
+    ledW.set(ldr.isDark());
     break;
 
   case Mode::BLINK:
