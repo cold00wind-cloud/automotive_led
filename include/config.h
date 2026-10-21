@@ -14,9 +14,6 @@ constexpr u16_t LDR_THRESHOLD_OFF = 1100;
 constexpr u32_t ADC_PERIOD = 10;
 constexpr u32_t DEBOUNCE_MC = 100;
 
-enum class Mode
-{
-  NORMAL,
-  BLINK,
-  CRASHED
-};
+enum class Mode {NORMAL, BLINK, CRASHED};
+
+enum class Event {BLINK, CRASHED};

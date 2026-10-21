@@ -14,6 +14,35 @@ Led ledW(LED_W);
 
 Ldr ldr(LDR, LDR_THRESHOLD_OFF, LDR_THRESHOLD_ON, ADC_PERIOD);
 
+void enterMode(Mode next)
+{
+  ledY.set(false);
+  ledW.set(false);
+  mode = next;
+}
+
+void dispatch(Event ev){
+  switch (mode)
+  {
+  case Mode::NORMAL:
+    if(ev == Event::BLINK)         enterMode(Mode::BLINK);
+    else if (ev == Event::CRASHED) enterMode(Mode::CRASHED);
+    break;
+
+  case Mode::BLINK:
+    if(ev == Event::BLINK)         enterMode(Mode::NORMAL);
+    else if (ev == Event::CRASHED) enterMode(Mode::CRASHED);
+    break;
+
+  case Mode::CRASHED:
+    if(ev == Event::CRASHED)       enterMode(Mode::NORMAL);
+    break;
+  
+  default:
+    break;
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -34,19 +63,8 @@ void loop()
   btnCrash.poll();
   ldr.poll();
 
-  if (btnBlink.wasPressed())
-  {
-    mode = (mode != Mode::BLINK) ? Mode::BLINK : Mode::NORMAL;
-    ledY.set(false);
-    ledW.set(false);
-  }
-
-  if (btnCrash.wasPressed())
-  {
-    mode = (mode != Mode::CRASHED) ? Mode::CRASHED : Mode::NORMAL;
-    ledY.set(false);
-    ledW.set(false);
-  }
+  if (btnBlink.wasPressed()) dispatch(Event::BLINK);
+  if (btnCrash.wasPressed()) dispatch(Event::CRASHED);
 
   switch (mode)
   {
